@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Updated the Markdown linter to fix its vulnerable TOML parser dependency.
 - Added the MIT license and packaged license metadata.
 - Rewrote the local install guide around no-key keyword search of your own vault.
 - Moved Docker and Helm instructions out of the README and corrected service configuration docs.

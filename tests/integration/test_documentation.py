@@ -224,7 +224,7 @@ def test_ci_uses_pinned_tools_and_postgresql_18_on_the_required_python_versions(
     assert 'name = "pip-audit"' in lockfile
     package = json.loads((PROJECT_ROOT / "package.json").read_text(encoding="utf-8"))
     package_lock = json.loads((PROJECT_ROOT / "package-lock.json").read_text(encoding="utf-8"))
-    assert package["devDependencies"]["markdownlint-cli2"] == "0.23.2"
+    assert package["devDependencies"]["markdownlint-cli2"] == "0.23.3"
     assert package_lock["lockfileVersion"] >= 3
     assert "node_modules/markdownlint-cli2" in package_lock["packages"]
 
