@@ -1,0 +1,107 @@
+image:
+  repository: registry.example.test/platform/vault-rag
+  tag: "1.2.3"
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets:
+  - name: vault-rag-pull
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+storage:
+  backend: sqlite
+  className: ""
+  size: 10Gi
+  replicas: 1
+  databaseUrlEnv: null
+  ownerRole: null
+  pool: null
+  connectTimeout: null
+  statementTimeout: null
+  lockTimeout: null
+  idleTransactionTimeout: null
+  allowInsecureTransport: null
+  cleanup: null
+api: null
+worker: null
+migrations: null
+sqlite:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  secrets:
+    githubToken:
+      name: vault-rag-sqlite-runtime
+      key: github_token
+    litellmApiKey:
+      name: vault-rag-sqlite-runtime
+      key: litellm_api_key
+embeddingModel: text-embedding-3-large
+serviceConfig:
+  schemaVersion: 2
+  syncInterval: 5m
+  repositories:
+    example-vault:
+      url: https://github.com/example/vault-rag-example.git
+      ref: refs/heads/main
+      credentialEnv: GITHUB_TOKEN
+  profiles:
+    example:
+      vaults:
+        - example-vault
+  embedding:
+    baseUrl: https://litellm.example.test/v1
+    apiKeyEnv: LITELLM_API_KEY
+    modelEnv: VAULT_RAG_EMBEDDING_MODEL
+    endpointClass: remote
+    revision: baseline-2026-08
+    dimensions: 1024
+monitoring:
+  serviceMonitor: true
+  podMonitor: true
+networkPolicy:
+  enabled: true
+  ingress:
+    cidrs:
+      - 192.0.2.0/32
+    ports:
+      - 8080
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - monitoring
+  egress:
+    databaseCidrs:
+      - 192.0.2.0/32
+    databasePorts:
+      - 5432
+    httpsCidrs:
+      - 192.0.2.0/32
+    httpsPorts:
+      - 443
+    dnsNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    dnsPorts:
+      - 53
+podAnnotations:
+  example.test/managed: "true"
+nodeSelector: {}
+tolerations: []
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values:
+                - arm64

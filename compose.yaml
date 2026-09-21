@@ -1,0 +1,253 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18@sha256:691673308c99d2161ba298736f3147f1f22d79de2fb7ec93ae9b4afcab870b62
+    environment:
+      POSTGRES_DB: vault_rag
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_USER: vault_rag
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./deploy/docker/postgres-init.sql:/docker-entrypoint-initdb.d/001-vault-rag.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username=vault_rag --dbname=vault_rag"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+  git-fixture-init:
+    build:
+      context: .
+    entrypoint: []
+    command: ["sh", "/fixture/compose-git-fixture.sh"]
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./deploy/docker/fixture-vault:/fixture/source:ro
+      - ./deploy/docker/compose-git-fixture.sh:/fixture/compose-git-fixture.sh:ro
+      - git-fixture-repo:/fixture/repo
+
+  git-fixture:
+    image: caddy:2.10.0@sha256:133b5eb7ef9d42e34756ba206b06d84f4e3eb308044e268e182c2747083f09de
+    depends_on:
+      git-fixture-init:
+        condition: service_completed_successfully
+    read_only: true
+    entrypoint: ["sh", "-ec"]
+    command:
+      - >-
+        caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+        caddy_pid=$!; until [ -r /data/caddy/pki/authorities/local/root.crt ]; do sleep 1; done;
+        cp /data/caddy/pki/authorities/local/root.crt /public-ca/root.crt;
+        chmod 0444 /public-ca/root.crt; wait "$$caddy_pid"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /config:mode=1777,size=16m
+    volumes:
+      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - git-fixture-repo:/srv:ro
+      - git-fixture-ca:/data
+      - git-fixture-public-ca:/public-ca
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -r /public-ca/root.crt && SSL_CERT_FILE=/public-ca/root.crt wget -q --spider -T 2 https://git-fixture/fixture-vault.git/info/refs",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build:
+      context: .
+    entrypoint: ["sh", "-ec"]
+    command:
+      - >-
+        vault-rag db migrate --service-config /config/service.yaml &&
+        vault-rag db check --service-config /config/service.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./deploy/docker/service.example.yaml:/config/service.yaml:ro
+    secrets:
+      - migrator_database_url
+    environment:
+      VAULT_RAG_DATABASE_URL_FILE: /run/secrets/migrator_database_url
+
+  api-a: &api
+    build:
+      context: .
+    command: ["api", "--service-config", "/config/service.yaml", "--data-root", "/data", "--host", "0.0.0.0", "--port", "8080"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      git-fixture:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:8080:8080
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+      - /data:mode=1777,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./deploy/docker/service.example.yaml:/config/service.yaml:ro
+      - git-fixture-public-ca:/fixture/ca:ro
+    secrets:
+      - api_a_database_url
+      - git_fixture_token
+      - api_litellm_api_key
+    environment:
+      GIT_FIXTURE_TOKEN_FILE: /run/secrets/git_fixture_token
+      LITELLM_API_KEY_FILE: /run/secrets/api_litellm_api_key
+      VAULT_RAG_DATABASE_URL_FILE: /run/secrets/api_a_database_url
+      VAULT_RAG_EMBEDDING_MODEL: ${VAULT_RAG_EMBEDDING_MODEL:-fixture-embedding}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready')"]
+      interval: 5s
+      timeout: 5s
+      start_period: 5s
+      retries: 24
+
+  api-b:
+    <<: *api
+    ports: []
+    secrets:
+      - api_b_database_url
+      - git_fixture_token
+      - api_litellm_api_key
+    environment:
+      GIT_FIXTURE_TOKEN_FILE: /run/secrets/git_fixture_token
+      LITELLM_API_KEY_FILE: /run/secrets/api_litellm_api_key
+      VAULT_RAG_DATABASE_URL_FILE: /run/secrets/api_b_database_url
+      VAULT_RAG_EMBEDDING_MODEL: ${VAULT_RAG_EMBEDDING_MODEL:-fixture-embedding}
+
+  worker-a: &worker
+    build:
+      context: .
+    command: ["worker", "--service-config", "/config/service.yaml", "--data-root", "/data"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      git-fixture:
+        condition: service_healthy
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+      - /data:mode=1777,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./deploy/docker/service.example.yaml:/config/service.yaml:ro
+      - git-fixture-public-ca:/fixture/ca:ro
+    secrets:
+      - worker_a_database_url
+      - git_fixture_token
+      - worker_litellm_api_key
+    environment:
+      GIT_FIXTURE_TOKEN_FILE: /run/secrets/git_fixture_token
+      LITELLM_API_KEY_FILE: /run/secrets/worker_litellm_api_key
+      VAULT_RAG_DATABASE_URL_FILE: /run/secrets/worker_a_database_url
+      VAULT_RAG_EMBEDDING_MODEL: ${VAULT_RAG_EMBEDDING_MODEL:-fixture-embedding}
+
+  worker-b:
+    <<: *worker
+    secrets:
+      - worker_b_database_url
+      - git_fixture_token
+      - worker_litellm_api_key
+    environment:
+      GIT_FIXTURE_TOKEN_FILE: /run/secrets/git_fixture_token
+      LITELLM_API_KEY_FILE: /run/secrets/worker_litellm_api_key
+      VAULT_RAG_DATABASE_URL_FILE: /run/secrets/worker_b_database_url
+      VAULT_RAG_EMBEDDING_MODEL: ${VAULT_RAG_EMBEDDING_MODEL:-fixture-embedding}
+
+  smoke:
+    build:
+      context: .
+    entrypoint: ["python", "/smoke/compose-smoke.py"]
+    command: ["verify"]
+    depends_on:
+      api-a:
+        condition: service_started
+      api-b:
+        condition: service_started
+      worker-a:
+        condition: service_started
+      worker-b:
+        condition: service_started
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./deploy/docker/compose-smoke.py:/smoke/compose-smoke.py:ro
+    secrets:
+      - smoke_database_url
+    environment:
+      VAULT_RAG_DATABASE_URL_FILE: /run/secrets/smoke_database_url
+
+volumes:
+  postgres-data: {}
+  git-fixture-repo: {}
+  git-fixture-ca: {}
+  git-fixture-public-ca: {}
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_SECRET_FILE:-./secrets/postgres_password}
+  migrator_database_url:
+    file: ${MIGRATOR_DATABASE_URL_SECRET_FILE:-./secrets/migrator_database_url}
+  api_a_database_url:
+    file: ${API_A_DATABASE_URL_SECRET_FILE:-./secrets/api_a_database_url}
+  api_b_database_url:
+    file: ${API_B_DATABASE_URL_SECRET_FILE:-./secrets/api_b_database_url}
+  worker_a_database_url:
+    file: ${WORKER_A_DATABASE_URL_SECRET_FILE:-./secrets/worker_a_database_url}
+  worker_b_database_url:
+    file: ${WORKER_B_DATABASE_URL_SECRET_FILE:-./secrets/worker_b_database_url}
+  smoke_database_url:
+    file: ${SMOKE_DATABASE_URL_SECRET_FILE:-./secrets/smoke_database_url}
+  git_fixture_token:
+    file: ${GIT_FIXTURE_TOKEN_SECRET_FILE:-./secrets/git_fixture_token}
+  api_litellm_api_key:
+    file: ${API_LITELLM_API_KEY_SECRET_FILE:-./secrets/api_litellm_api_key}
+  worker_litellm_api_key:
+    file: ${WORKER_LITELLM_API_KEY_SECRET_FILE:-./secrets/worker_litellm_api_key}

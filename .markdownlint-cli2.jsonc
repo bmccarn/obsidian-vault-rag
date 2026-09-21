@@ -1,0 +1,15 @@
+{
+  "config": {
+    "MD013": false,
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD025": {
+      "front_matter_title": ""
+    }
+  },
+  "ignores": [
+    "**/CLAUDE.local.md",
+    "tests/fixtures/vault-a/projects/example.md"
+  ]
+}

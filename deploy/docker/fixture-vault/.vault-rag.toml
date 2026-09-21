@@ -1,0 +1,8 @@
+schema_version = 1
+id = "fixture-vault"
+egress_policy = "local-only"
+include = ["**/*.md"]
+exclude = [".git/**"]
+
+[metadata]
+frontmatter_fields = []

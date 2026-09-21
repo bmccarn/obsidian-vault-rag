@@ -1,0 +1,24 @@
+{{- if eq .Values.storage.backend "postgresql" }}
+vault-rag deploys stateless PostgreSQL API and worker Deployments. The migration Job
+runs before install and upgrade workloads.
+
+Check rollout:
+  kubectl rollout status deployment/{{ include "vault-rag.fullname" . }}-api -n {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ include "vault-rag.fullname" . }}-worker -n {{ .Release.Namespace }}
+
+The Service is ClusterIP-only and selects API pods. Supply distinct API, worker,
+and migrator database Secrets, plus distinct API and worker runtime Secrets.
+{{- else if eq .Values.storage.backend "sqlite" }}
+vault-rag deploys one SQLite StatefulSet running the combined serve command.
+
+Check rollout:
+  kubectl rollout status statefulset/{{ include "vault-rag.fullname" . }} -n {{ .Release.Namespace }}
+
+The Service is ClusterIP-only and selects the single SQLite writer. Supply the
+runtime Secret containing the GitHub token and LiteLLM API key.
+{{- else }}
+Choose storage.backend and provide either the strict SQLite or PostgreSQL values block.
+{{- end }}
+The default NetworkPolicy CIDRs use the non-routable documentation range
+192.0.2.0/32. Replace every CIDR with the exact trusted client, GitHub, and
+LiteLLM ranges before production deployment.

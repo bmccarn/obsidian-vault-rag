@@ -1,0 +1,41 @@
+# This Compose-only configuration serves committed synthetic fixture content.
+# Runtime database URLs and the placeholder fixture credential arrive via secret files.
+schemaVersion: 2
+storage:
+  backend: postgresql
+  databaseUrlEnv: VAULT_RAG_DATABASE_URL
+  # Compose's isolated PostgreSQL fixture is intentionally plaintext; this is explicit.
+  allowInsecureTransport: true
+  pool:
+    minSize: 1
+    maxSize: 4
+    timeout: 5s
+  connectTimeout: 5s
+  statementTimeout: 5s
+  lockTimeout: 5s
+  idleTransactionTimeout: 30s
+syncInterval: 5s
+mcp:
+  enabled: true
+  allowedHosts:
+    - api-a:8080
+    - api-b:8080
+    - 127.0.0.1:8080
+    - localhost:8080
+  allowedOrigins: []
+repositories:
+  fixture-vault:
+    url: https://git-fixture/fixture-vault.git
+    ref: refs/heads/main
+    credentialEnv: GIT_FIXTURE_TOKEN
+    caCertPath: /fixture/ca/root.crt
+profiles:
+  fixture:
+    vaults: [fixture-vault]
+embedding:
+  baseUrl: https://embedding.invalid/v1
+  apiKeyEnv: LITELLM_API_KEY
+  modelEnv: VAULT_RAG_EMBEDDING_MODEL
+  endpointClass: remote
+  revision: fixture-2026-08
+  dimensions: 8

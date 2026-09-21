@@ -1,0 +1,16 @@
+{{- if and (ne .Values.storage.backend "") .Values.monitoring.serviceMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "vault-rag.fullname" . }}-{{ include "vault-rag.serviceComponent" . }}
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ include "vault-rag.serviceComponent" . }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" (include "vault-rag.serviceComponent" .)) | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+{{- end }}

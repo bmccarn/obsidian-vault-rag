@@ -1,0 +1,8 @@
+schema_version = 1
+id = "vault-a"
+egress_policy = "remote-allowed"
+include = ["**/*.md", "attachments/**/*.log"]
+exclude = [".git/**", ".obsidian/**", "templates/**", "attachments/**/*.csv"]
+
+[metadata]
+frontmatter_fields = ["type", "status", "tags"]

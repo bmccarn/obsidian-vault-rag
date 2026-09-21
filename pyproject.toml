@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vault-rag"
+version = "0.1.0"
+description = "Vault-scoped hybrid retrieval for Obsidian and agent clients"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116",
+  "httpx>=0.28",
+  "markdown-it-py>=3.0",
+  "mcp>=2.0,<3",
+  "numpy>=2.2",
+  "pathspec>=0.12",
+  "pgvector>=0.4.1,<0.5",
+  "prometheus-client>=0.22",
+  "psycopg-pool>=3.2.6,<3.3",
+  "psycopg[binary]>=3.2.10,<3.3",
+  "pydantic>=2.11",
+  "pyyaml>=6.0.2",
+  "tiktoken>=0.9",
+  "tomli-w>=1.2",
+  "typer>=0.16",
+  "uvicorn>=0.35",
+]
+
+[project.urls]
+Repository = "https://github.com/bmccarn/obsidian-vault-rag"
+Issues = "https://github.com/bmccarn/obsidian-vault-rag/issues"
+
+[project.scripts]
+vault-rag = "vault_rag.cli:app"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.15",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "pip-audit>=2.9,<3",
+  "respx>=0.22",
+  "ruff>=0.11",
+  "types-pyyaml>=6.0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vault_rag"]
+exclude = ["**/CLAUDE.local.md"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/vault_rag",
+  "tests",
+  "docs",
+  "examples",
+  "deploy",
+  "charts",
+  "compose.yaml",
+  "Dockerfile",
+  ".dockerignore",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "CHANGELOG.md",
+  "README.md",
+  "pyproject.toml",
+  "uv.lock",
+]
+exclude = [
+  "**/CLAUDE.local.md",
+  "**/__pycache__",
+  "**/*.py[cod]",
+  "node_modules",
+  "node_modules/**",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["vault_rag"]

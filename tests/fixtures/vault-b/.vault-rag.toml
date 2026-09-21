@@ -1,0 +1,8 @@
+schema_version = 1
+id = "vault-b"
+egress_policy = "local-only"
+include = ["**/*.md", "attachments/**/*.log"]
+exclude = [".git/**", ".obsidian/**", "templates/**", "attachments/**/*.csv"]
+
+[metadata]
+frontmatter_fields = []

@@ -1,0 +1,195 @@
+{{- if and (ne .Values.storage.backend "") .Values.networkPolicy.enabled }}
+{{- if eq .Values.storage.backend "postgresql" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vault-rag.fullname" . }}-api
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        {{- range .Values.networkPolicy.ingress.cidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.ingress.namespaceSelector | nindent 12 }}
+      ports:
+        {{- range .Values.networkPolicy.ingress.ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+  egress:
+    - to:
+        {{- range .Values.networkPolicy.egress.databaseCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.databasePorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    - to:
+        {{- range .Values.networkPolicy.egress.httpsCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.httpsPorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    - to:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.egress.dnsNamespaceSelector | nindent 12 }}
+      ports:
+        {{- range .Values.networkPolicy.egress.dnsPorts }}
+        - protocol: UDP
+          port: {{ . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vault-rag.fullname" . }}-worker
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        {{- range .Values.networkPolicy.egress.databaseCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.databasePorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    - to:
+        {{- range .Values.networkPolicy.egress.httpsCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.httpsPorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    - to:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.egress.dnsNamespaceSelector | nindent 12 }}
+      ports:
+        {{- range .Values.networkPolicy.egress.dnsPorts }}
+        - protocol: UDP
+          port: {{ . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+{{- if .Values.migrations.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vault-rag.fullname" . }}-migration
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "migration") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        {{- range .Values.networkPolicy.egress.databaseCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.databasePorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    - to:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.egress.dnsNamespaceSelector | nindent 12 }}
+      ports:
+        {{- range .Values.networkPolicy.egress.dnsPorts }}
+        - protocol: UDP
+          port: {{ . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+{{- end }}
+{{- else }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vault-rag.fullname" . }}-serve
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "serve") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        {{- range .Values.networkPolicy.ingress.cidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.ingress.namespaceSelector | nindent 12 }}
+      ports:
+        {{- range .Values.networkPolicy.ingress.ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+  egress:
+    - to:
+        {{- range .Values.networkPolicy.egress.httpsCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.httpsPorts }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    - to:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.egress.dnsNamespaceSelector | nindent 12 }}
+      ports:
+        {{- range .Values.networkPolicy.egress.dnsPorts }}
+        - protocol: UDP
+          port: {{ . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,9 @@
+{
+    auto_https disable_redirects
+}
+
+https://git-fixture {
+    tls internal
+    root * /srv
+    file_server
+}

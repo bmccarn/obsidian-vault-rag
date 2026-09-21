@@ -1,0 +1,150 @@
+image:
+  repository: registry.example.test/platform/vault-rag
+  tag: "1.2.3"
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets:
+  - name: vault-rag-pull
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+storage:
+  backend: postgresql
+  className: null
+  size: null
+  replicas: null
+  databaseUrlEnv: VAULT_RAG_DATABASE_URL
+  ownerRole: vault_rag_owner
+  pool:
+    minSize: 1
+    maxSize: 4
+    timeout: 5s
+  connectTimeout: 5s
+  statementTimeout: 5s
+  lockTimeout: 5s
+  idleTransactionTimeout: 30s
+  allowInsecureTransport: true
+  cleanup:
+    enabled: false
+    keepPromoted: 3
+    minAge: 7d
+    batchSize: 100
+api:
+  replicas: 2
+  databaseSecret:
+    name: vault-rag-api-db
+    key: database_url
+  runtimeSecret:
+    name: vault-rag-api-runtime
+    litellmKey: litellm_api_key
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 80
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+  pdb:
+    enabled: true
+    minAvailable: 1
+worker:
+  replicas: 2
+  terminationGracePeriodSeconds: 600
+  databaseSecret:
+    name: vault-rag-worker-db
+    key: database_url
+  runtimeSecret:
+    name: vault-rag-worker-runtime
+    githubToken: github_token
+    litellmKey: litellm_api_key
+  checkout:
+    sizeLimit: 2Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  pdb:
+    enabled: true
+    minAvailable: 1
+migrations:
+  enabled: true
+  databaseSecret:
+    name: vault-rag-migrator-db
+    key: database_url
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 3600
+sqlite: null
+embeddingModel: text-embedding-3-large
+serviceConfig:
+  schemaVersion: 2
+  syncInterval: 5m
+  repositories:
+    example-vault:
+      url: https://github.com/example/vault-rag-example.git
+      ref: refs/heads/main
+      credentialEnv: GITHUB_TOKEN
+  profiles:
+    example:
+      vaults:
+        - example-vault
+  embedding:
+    baseUrl: https://litellm.example.test/v1
+    apiKeyEnv: LITELLM_API_KEY
+    modelEnv: VAULT_RAG_EMBEDDING_MODEL
+    endpointClass: remote
+    revision: baseline-2026-08
+    dimensions: 1024
+monitoring:
+  serviceMonitor: true
+  podMonitor: true
+networkPolicy:
+  enabled: true
+  ingress:
+    cidrs:
+      - 192.0.2.0/32
+    ports:
+      - 8080
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+  egress:
+    databaseCidrs:
+      - 192.0.2.0/32
+    databasePorts:
+      - 5432
+    httpsCidrs:
+      - 192.0.2.0/32
+    httpsPorts:
+      - 443
+    dnsNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    dnsPorts:
+      - 53
+podAnnotations:
+  example.test/managed: "true"
+nodeSelector: {}
+tolerations: []
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values:
+                - arm64

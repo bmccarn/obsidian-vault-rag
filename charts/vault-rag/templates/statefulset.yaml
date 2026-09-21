@@ -1,0 +1,156 @@
+{{- if eq .Values.storage.backend "sqlite" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "vault-rag.fullname" . }}
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+    app.kubernetes.io/component: serve
+spec:
+  serviceName: {{ include "vault-rag.fullname" . }}
+  replicas: {{ .Values.storage.replicas }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "serve") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "serve") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vault-rag
+          image: {{ include "vault-rag.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - serve
+            - --service-config
+            - /config/service.yaml
+            - --data-root
+            - /data
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: GITHUB_TOKEN_FILE
+              value: /run/secrets/github_token
+            - name: LITELLM_API_KEY_FILE
+              value: /run/secrets/litellm_api_key
+            - name: VAULT_RAG_EMBEDDING_MODEL
+              value: {{ .Values.embeddingModel | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.sqlite.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /config/service.yaml
+              subPath: service.yaml
+              readOnly: true
+            - name: github-token
+              mountPath: /run/secrets/github_token
+              subPath: github_token
+              readOnly: true
+            - name: litellm-api-key
+              mountPath: /run/secrets/litellm_api_key
+              subPath: litellm_api_key
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "vault-rag.fullname" . }}-config
+        - name: github-token
+          secret:
+            secretName: {{ .Values.sqlite.secrets.githubToken.name }}
+            defaultMode: 256
+            items:
+              - key: {{ .Values.sqlite.secrets.githubToken.key }}
+                path: github_token
+        - name: litellm-api-key
+          secret:
+            secretName: {{ .Values.sqlite.secrets.litellmApiKey.name }}
+            defaultMode: 256
+            items:
+              - key: {{ .Values.sqlite.secrets.litellmApiKey.key }}
+                path: litellm_api_key
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" "serve") | nindent 10 }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- with .Values.storage.className }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size | quote }}
+{{- end }}

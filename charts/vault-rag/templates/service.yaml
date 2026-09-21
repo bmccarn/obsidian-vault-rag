@@ -1,0 +1,22 @@
+{{- if ne .Values.storage.backend "" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vault-rag.fullname" . }}
+  labels:
+    {{- include "vault-rag.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ include "vault-rag.serviceComponent" . }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: http
+  selector:
+    {{- include "vault-rag.componentSelectorLabels" (dict "root" . "component" (include "vault-rag.serviceComponent" .)) | nindent 4 }}
+{{- end }}
