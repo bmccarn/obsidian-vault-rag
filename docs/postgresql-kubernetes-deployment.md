@@ -2,7 +2,7 @@
 
 This guide is for operators with a private Kubernetes cluster and PostgreSQL 18
 with pgvector. The chart installs application workloads, not a database or public
-route. For a credential-free local trial use the [Compose demo](../README.md#run-the-synthetic-service-demo-with-docker-compose).
+route. For a credential-free local trial use the [Compose demo](docker-demo.md).
 
 ## Prerequisites and trust boundary
 
@@ -50,7 +50,7 @@ that setting belongs to the isolated synthetic demo, not this production baselin
 
 ## Configure the chart
 
-The [README Helm walkthrough](../README.md#deploy-the-shared-service-with-helm)
+The [Helm walkthrough](helm.md)
 shows secret creation and an operator values file. Select a successful published
 image's immutable SHA tag or digest. Render the chart before applying it:
 

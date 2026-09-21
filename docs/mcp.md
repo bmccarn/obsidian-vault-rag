@@ -1,10 +1,10 @@
 # MCP 2026-07-28 agent integration
 
-Vault RAG exposes its transport-neutral retrieval facade at the exact
+Vault RAG exposes its retrieval tools at the exact
 Streamable HTTP route `/mcp`. The adapter uses the official Python MCP SDK 2.x
 and the MCP `2026-07-28` protocol revision.
 
-## Why the endpoint is stateless JSON over HTTP
+## Transport
 
 The endpoint is configured with:
 
@@ -19,7 +19,7 @@ capabilities with every request. Vault RAG returns one ordinary JSON response
 and does not issue `Mcp-Session-Id`. It does not hold an idle SSE connection.
 The optional Streamable HTTP GET receive channel is intentionally disabled
 with HTTP 405 because this server sends no unsolicited messages. Only POST is
-part of the supported MCP transport surface.
+part of the supported MCP transport.
 MCP `2026-07-28` also defines the POST-based `subscriptions/listen` stream.
 Vault RAG explicitly does not advertise or serve it: tools, prompts, and
 resources change only with a deployment, so an idle change stream would add
@@ -34,7 +34,7 @@ The SDK can also negotiate with supported 2025-era clients. `stateless_http`
 makes those HTTP exchanges sessionless too, but new integrations should use
 normal MCP discovery rather than pinning an old protocol.
 
-## Discovery surface
+## Discovery
 
 `server/discover` identifies the server, its instructions, supported protocol,
 capabilities, and private cache hints. Agents then discover these tools:
@@ -148,6 +148,9 @@ Gateway without adding an audited application authentication design first.
 
 ## Connect clients
 
+First deploy the service using the [deployment guide](postgresql-kubernetes-deployment.md).
+The local SQLite CLI does not expose an MCP endpoint.
+
 Replace the example with the operator-owned private route. These commands store
 only the endpoint URL; they do not launch a local Vault RAG process.
 
@@ -211,8 +214,8 @@ Adding a vault is a server operation, not an MCP client operation:
    operator GitOps values.
 4. Add the vault ID to one or more explicit profiles. Prefer narrow profiles;
    do not silently add sensitive vaults to a broad existing profile.
-5. Render Helm and Kustomize, review the ConfigMap and worker-only secret
-   boundary, merge GitOps, and let Flux reconcile.
+5. Render the Helm chart, review the ConfigMap and worker-only secrets, and
+   deploy through your normal release process.
 6. Confirm one worker acquires the vault lease, fetches/builds/promotes one
    immutable revision, and the API reports the expected commit.
 7. Run a vault-specific retrieval fixture, exact-citation validation, stale-hash

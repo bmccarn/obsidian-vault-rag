@@ -143,6 +143,7 @@ def test_sdist_still_ships_the_installable_project(
 
     assert {
         "README.md",
+        "LICENSE",
         "docs/configuration.md",
         "docs/mcp.md",
         "docs/retrieval.md",
@@ -154,12 +155,11 @@ def test_sdist_still_ships_the_installable_project(
 
 
 def test_operator_docs_cover_phase_1_hardening_contracts() -> None:
-    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
     configuration = (PROJECT_ROOT / "docs/configuration.md").read_text(encoding="utf-8")
     retrieval = (PROJECT_ROOT / "docs/retrieval.md").read_text(encoding="utf-8")
 
     for term in ("lexical", "dense", "hybrid", "--frontmatter", "--path-prefix"):
-        assert term in readme
+        assert term in retrieval
     for term in (
         "max_batch_tokens",
         "revision",
@@ -190,7 +190,7 @@ def test_release_docs_keep_operator_deployment_inputs_out_of_artifacts() -> None
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
     configuration = (PROJECT_ROOT / "docs/configuration.md").read_text(encoding="utf-8")
 
-    assert "Private deployment inputs are not release artifacts." in readme
+    assert "SECURITY.md" in readme
     assert "Private deployment inputs are not release artifacts." in configuration
 
 
@@ -203,4 +203,5 @@ def test_wheel_ships_only_the_package_and_metadata(
     roots = sorted({name.split("/", 1)[0] for name in names})
 
     assert roots == ["vault_rag", "vault_rag-0.1.0.dist-info"]
+    assert "vault_rag-0.1.0.dist-info/licenses/LICENSE" in names
     assert [name for name in names if Path(name).name in FORBIDDEN_BASENAMES] == []

@@ -18,6 +18,9 @@ README = PROJECT_ROOT / "README.md"
 RETRIEVAL_DOC = PROJECT_ROOT / "docs" / "retrieval.md"
 CONFIGURATION_DOC = PROJECT_ROOT / "docs" / "configuration.md"
 MCP_DOC = PROJECT_ROOT / "docs" / "mcp.md"
+HELM_DOC = PROJECT_ROOT / "docs" / "helm.md"
+CONTRIBUTING_DOC = PROJECT_ROOT / "CONTRIBUTING.md"
+DOCKER_DOC = PROJECT_ROOT / "docs" / "docker-demo.md"
 
 DOCUMENTED_EXIT_CODES = (
     0,
@@ -113,15 +116,14 @@ def test_postgresql_docs_specify_nested_database_commands_and_cleanup_opt_in() -
     assert "Automatic cleanup is disabled for the initial observation window" in deployment
 
 
-def test_readme_exposes_only_nested_database_migration_command() -> None:
-    readme = README.read_text(encoding="utf-8")
-
+def test_helm_guide_exposes_only_nested_database_migration_command() -> None:
+    readme = HELM_DOC.read_text(encoding="utf-8")
     assert "vault-rag db migrate" in readme
     assert "`vault-rag migrate`" not in readme
 
 
 def test_helm_docs_explain_secret_rotation_rollout() -> None:
-    for document in (README, CONFIGURATION_DOC):
+    for document in (HELM_DOC, CONFIGURATION_DOC):
         text = document.read_text(encoding="utf-8")
 
         assert "kubectl rollout restart deployment/vault-rag-api" in text
@@ -131,7 +133,6 @@ def test_helm_docs_explain_secret_rotation_rollout() -> None:
 
 
 def test_helm_docs_and_schema_support_private_registry_credentials() -> None:
-    readme = README.read_text(encoding="utf-8")
     values = yaml.safe_load(
         (PROJECT_ROOT / "charts" / "vault-rag" / "values.yaml").read_text(encoding="utf-8")
     )
@@ -151,6 +152,7 @@ def test_helm_docs_and_schema_support_private_registry_credentials() -> None:
     for template in workload_templates:
         assert ".Values.imagePullSecrets" in template
         assert "imagePullSecrets:" in template
+    readme = HELM_DOC.read_text(encoding="utf-8")
     assert 'kubectl -n "$namespace" create secret docker-registry' in readme
     assert "read:packages" in readme
     assert "imagePullSecrets:" in readme
@@ -213,7 +215,7 @@ def test_ci_uses_pinned_tools_and_postgresql_18_on_the_required_python_versions(
         "3.13",
         "3.14",
     ]
-    readme = README.read_text(encoding="utf-8")
+    readme = CONTRIBUTING_DOC.read_text(encoding="utf-8")
     assert "VAULT_RAG_TEST_POSTGRES_DSN" in readme
     assert "vault_rag_test" in readme
     pyproject = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -232,8 +234,8 @@ def test_service_docs_distinguish_local_contracts_from_private_operations() -> N
     configuration = CONFIGURATION_DOC.read_text(encoding="utf-8")
     retrieval = RETRIEVAL_DOC.read_text(encoding="utf-8")
 
-    assert "repository-local synthetic service scenario" in readme
-    assert "private GitOps repository" in configuration
+    assert "synthetic notes" in readme
+    assert "private routing" in configuration
     assert "operator-owned 25-case corpus" in retrieval
     assert "two-machine private routing" in retrieval
 
@@ -299,15 +301,10 @@ def test_ci_builds_smokes_and_publishes_the_production_image() -> None:
         assert expected in publish_script
     assert 'docker push "${image}:latest"' not in publish_script
 
-    readme = README.read_text(encoding="utf-8")
+    readme = DOCKER_DOC.read_text(encoding="utf-8")
     assert "ghcr.io/bmccarn/obsidian-vault-rag" in readme
     assert "immutable SHA tag" in readme
-    for expected in (
-        "private routing",
-        "Kubernetes behavior",
-        "private-vault credentials",
-        "live outages",
-        "two-machine access",
-        "25-case p95 benchmark",
-    ):
-        assert expected in readme
+    deployment = (PROJECT_ROOT / "docs" / "postgresql-kubernetes-deployment.md").read_text(
+        encoding="utf-8"
+    )
+    assert "repository CI cannot certify them" in deployment

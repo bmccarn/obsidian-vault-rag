@@ -137,83 +137,67 @@ export LITELLM_API_KEY="…"
 export VAULT_RAG_EMBEDDING_MODEL="your-embedding-model"
 ```
 
-## Shared service configuration
+## Enable embeddings
 
-`vault-rag serve` reads one strict YAML document instead of the machine-local
-registry. The service owns all managed paths beneath its `--data-root`:
+Start with the [local CLI setup](../README.md#search-your-vault). For a remote
+provider, change the vault manifest to `egress_policy = "remote-allowed"` and
+replace the registry's placeholder embedding section:
 
-```text
-/data/repos/<vault-id>          managed Git checkout
-/data/index.sqlite3             shared SQLite index
-/data/sync-state/<vault-id>.json  reconciliation state
+```toml
+[embedding]
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+model_env = "VAULT_RAG_EMBEDDING_MODEL"
+endpoint_class = "remote"
 ```
 
-Start from `deploy/docker/service.example.yaml`. Its synthetic URLs are safe to
-commit but cannot synchronize a real repository. Copy it to the ignored
-`deploy/docker/service.yaml`, then set real HTTPS repository and embedding
-URLs:
-
-```yaml
-schemaVersion: 1
-syncInterval: 5m
-mcp:
-  enabled: false
-  allowedHosts: []
-  allowedOrigins: []
-repositories:
-  example-vault:
-    url: https://github.com/your-org/your-vault.git
-    ref: refs/heads/main
-    credentialEnv: GITHUB_TOKEN
-profiles:
-  example:
-    vaults: [example-vault]
-embedding:
-  baseUrl: https://litellm.example.com/v1
-  apiKeyEnv: LITELLM_API_KEY
-  modelEnv: VAULT_RAG_EMBEDDING_MODEL
-  endpointClass: remote
-  revision: baseline-2026-08
-  dimensions: 1024
-```
-
-The top-level fields are `schemaVersion`, a bounded `syncInterval` such as
-`5m`, optional `mcp`, `repositories`, `profiles`, `embedding`, and optional
-`storage`.
-Repository keys are lowercase vault IDs; each repository requires an HTTPS URL
-without embedded credentials and a full `refs/heads/...` or `refs/tags/...`
-reference. `credentialEnv` names an environment variable, never a YAML
-credential. Profiles are explicit non-empty allowlists of configured repository
-keys. The `embedding` fields use the same validation and compatibility rules as
-the [machine registry](#embedding), with camel-case YAML names.
-
-`mcp.enabled` defaults to `false`. Enabling it requires at least one explicit
-`allowedHosts` entry; `allowedOrigins` may remain empty for native clients that
-send no Origin header. Disabled MCP must retain empty allowlists. The transport
-is stateless JSON Streamable HTTP at exact path `/mcp`; see the
-[MCP integration guide](mcp.md) for transport, security, schema, and client
-contracts.
-
-For a Docker or Kubernetes secret mount, leave the ordinary variable unset and
-set `<NAME>_FILE` to the mounted file. The service reads one bounded value at
-startup. Compose uses `GITHUB_TOKEN_FILE=/run/secrets/github_token` and
-`LITELLM_API_KEY_FILE=/run/secrets/litellm_api_key`; it supplies
-`VAULT_RAG_EMBEDDING_MODEL` directly as a non-secret model identifier. Do not
-put tokens, local override YAML files, checkouts, state files, or SQLite
-databases into version control or an image build context.
-
-The production container runs:
+Supply your provider key through the environment, not a committed file. Set the
+model and rebuild the index after changing the configuration:
 
 ```bash
-vault-rag serve --service-config /config/service.yaml --data-root /data \
-  --host 0.0.0.0 --port 8080
+# Set OPENAI_API_KEY securely in your environment first.
+export VAULT_RAG_EMBEDDING_MODEL=text-embedding-3-small
+vault-rag index --profile personal --rebuild --json
+vault-rag search --profile personal "how do I deploy safely?" --mode hybrid --json
 ```
 
-`/health/live` reports process liveness. `/health/ready` becomes successful
-when at least one configured profile has a usable lexical source/index pair.
-Cached healthy checkouts and indexes remain usable during a temporary GitHub or
-LiteLLM failure, so a restart with unchanged repository SHA does not require
-re-embedding before lexical requests can succeed.
+The provider receives selected note text and query text. Rebuilding embeds all
+selected notes and may incur charges. For another OpenAI-compatible provider,
+use its base URL, model, and key variable. For an entirely local model, keep
+`local-only`, set `endpoint_class = "local"`, and use the model server's loopback
+URL. Do not classify a proxy as local if it forwards text to a remote provider.
+
+## Shared service configuration
+
+The shared service uses YAML instead of the CLI's TOML registry. The supported
+PostgreSQL deployment runs separate `vault-rag api`, `vault-rag worker`, and
+`vault-rag db migrate` processes with `schemaVersion: 2` and
+`storage.backend: postgresql`. PostgreSQL stores the index and served text;
+workers keep disposable Git checkouts below their data root.
+
+Use the [Helm walkthrough](helm.md) for a real deployment. The checked-in
+`deploy/docker/service.example.yaml` belongs to the [synthetic Docker demo](docker-demo.md),
+not a ready-made configuration for your notes. The older `vault-rag serve`
+command and schema-v1 SQLite service remain available for compatibility;
+they are not the production container's default.
+
+Service YAML has `schemaVersion`, `syncInterval`, `repositories`, `profiles`,
+`embedding`, and `storage`, with optional `mcp`. Repository keys must match vault
+manifest IDs. Each repository uses an HTTPS Git URL, a full ref such as
+`refs/heads/main`, and a `credentialEnv` variable name. The embedding fields use
+camel-case names such as `baseUrl` and `endpointClass` with the same egress rules
+as the CLI registry.
+
+For mounted secrets, leave the ordinary variable unset and set `<NAME>_FILE` to
+the file path. Each process reads its credentials at startup. Keep credential
+values, checkouts, databases, and private configuration out of Git and container
+build contexts.
+
+MCP is disabled by default. Enabling it requires explicit `allowedHosts`;
+`allowedOrigins` may be empty for clients that send no Origin header. See the
+[MCP guide](mcp.md). `/health/live` checks process liveness. `/health/ready`
+requires a usable lexical index; it does not prove that embeddings are available
+or that the latest Git commit has been indexed.
 
 ## Helm values and Kubernetes secrets
 
@@ -243,11 +227,10 @@ An operator values file can begin:
 
 ```yaml
 image:
-  repository: ghcr.io/your-org/vault-rag
-  tag: "0.1.0"
+  repository: ghcr.io/bmccarn/obsidian-vault-rag
+  tag: "sha-<full-commit>"
   digest: "" # sha256:<64 lowercase hex> overrides tag when set
-imagePullSecrets:
-  - name: vault-rag-registry
+imagePullSecrets: [] # public image; add a pull secret only for a private mirror
 storage:
   backend: postgresql
   databaseUrlEnv: VAULT_RAG_DATABASE_URL
@@ -260,7 +243,7 @@ storage:
   statementTimeout: 5s
   lockTimeout: 5s
   idleTransactionTimeout: 30s
-  allowInsecureTransport: true # required only for an approved non-TLS private DB route
+  allowInsecureTransport: false # use verified TLS for production
   cleanup:
     enabled: false
     keepPromoted: 3
@@ -316,7 +299,7 @@ serviceConfig:
 
 For non-loopback PostgreSQL DSNs, prefer `sslmode=require`, `verify-ca`, or
 `verify-full`. `allowInsecureTransport: true` is an explicit exception for an
-operator-approved private non-TLS route such as the current DB-core contract;
+operator-approved private non-TLS route such as the isolated Docker demo;
 it is never inferred. Keep it `false` for TLS-enabled PostgreSQL.
 
 Render and deploy with:
@@ -370,11 +353,10 @@ rollback gates.
 Public CI uses only repository-local synthetic service and deployment contracts.
 It never needs private repositories, credentials, or operator routing
 configuration. The chart's ClusterIP-only boundary is intentional: configure
-Envoy/Tailscale exposure in the private GitOps repository.
+private routing in your own deployment configuration.
 
-The operator is responsible for the external centralized 25-case evaluation and
-two-machine routing verification. These deployment gates cannot be inferred
-from a public package, chart render, or repository-local test.
+Test retrieval quality with your own notes and verify access from each client
+machine. A package build or chart render does not test your network or corpus.
 
 Private deployment inputs are not release artifacts.
 

@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.0 — Initial public release
+## Unreleased
+
+- Added the MIT license and packaged license metadata.
+- Rewrote the local install guide around no-key keyword search of your own vault.
+- Moved Docker and Helm instructions out of the README and corrected service configuration docs.
+
+## 0.1.0 initial public release
 
 - Local SQLite lexical, dense and hybrid retrieval with explicit vault profiles.
 - Incremental indexing, source citations, filters and hash-verified reads.

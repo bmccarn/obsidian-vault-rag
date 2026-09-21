@@ -5,7 +5,7 @@ FROM python:3.12-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142
 COPY --from=uv /uv /uvx /bin/
 WORKDIR /app
 
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN uv sync --frozen --no-dev --no-editable --no-install-project
 
 COPY src ./src
