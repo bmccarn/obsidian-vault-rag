@@ -235,7 +235,9 @@ docker compose down
 ```
 
 The setup script creates the exact secret filenames referenced by `compose.yaml`
-in ignored `secrets/`, and refuses to overwrite existing files. Compose mounts
+in ignored `secrets/`, and refuses to overwrite existing files. Fixture files are
+mode 0444 inside a user-only host directory so the non-root Linux containers can
+read their bind mounts; never put real credentials in this fixture setup. Compose mounts
 `deploy/docker/service.example.yaml` directly; editing `service.yaml` does not
 change this demo. The fixture profile is `fixture`, not `example`. Only the first
 API publishes loopback port 8080. The embedding URL is deliberately nonfunctional;

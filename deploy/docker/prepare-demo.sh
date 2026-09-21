@@ -21,4 +21,10 @@ done
 printf 'fixture-token\n' > secrets/git_fixture_token
 printf 'fixture-api-key\n' > secrets/api_litellm_api_key
 printf 'fixture-worker-key\n' > secrets/worker_litellm_api_key
+# Linux Compose bind-mounts these files without remapping ownership. The fixed
+# container UID must be able to read them. These values are demo-only; the host
+# directory remains user-only and each container receives only its named mounts.
+for name in "${names[@]}"; do
+  chmod 0444 "secrets/$name"
+done
 printf 'Created synthetic demo secret files. Next: docker compose build\n'

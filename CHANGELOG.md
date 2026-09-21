@@ -7,6 +7,7 @@
 - PostgreSQL 18/pgvector shared API and lease-coordinated workers.
 - Stateless HTTP MCP tools for profile discovery, search, read and status.
 - Synthetic CLI/Compose demos, Helm chart and private deployment guidance.
+- Updated HTTP transport dependencies to address known security advisories.
 
 This repository starts with a clean public history. Commands and Python imports
 remain `vault-rag` and `vault_rag`. Container images use immutable main-commit tags;
